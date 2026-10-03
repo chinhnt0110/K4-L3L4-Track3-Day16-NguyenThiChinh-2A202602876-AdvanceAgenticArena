@@ -91,11 +91,21 @@ class Retry(Middleware):
         #  1. Trong khi số lần đã thử < self.max_attempts VÀ kết quả còn
         #     hỏng — tức `(not result.ok) or is_degraded(result.content)` —
         #     thì gọi lại `call(name, args)` với ĐÚNG name/args cũ.
+        attempts = 1
+        while attempts < self.max_attempts and (
+            not result.ok or is_degraded(result.content)
+        ):
+            
         #  2. DỪNG THỬ LẠI khi ngân sách đã cạn: nếu
         #     `ctx.max_tool_calls` khác None và
         #     `ctx.tools.calls >= ctx.max_tool_calls - self.reserve`
         #     thì đừng gọi thêm lượt nào nữa (xem phần cảnh báo ở trên).
+            if not ctx.max_tool_calls and ctx.tools.calls >= ctx.max_tool_calls - self.reserve:
+                break
         #  3. Trả về kết quả cuối cùng (kể cả khi vẫn hỏng: agent phải
         #     nhìn thấy sự thật, đừng bịa nội dung thay nó).
+            result = call(name,args)
+            attempts += 1
         #  4. Ghi số lần đã thử vào ctx.state để gỡ lỗi.
+        ctx.state["retry_attempts"] = ctx.state.get("retry_attempts", 0) + attempts - 1
         return result  # <- mặc định KHÔNG LÀM GÌ: agent vẫn chạy được
